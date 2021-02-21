@@ -1,20 +1,30 @@
 package m.gaw.kafkademo.implementation.components;
 
-import m.gaw.kafkademo.abstraction.components.Producer;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.function.BiConsumer;
+
+@Log4j2
 @Component
-public class KafkaProducer implements Producer<String> {
+@RequiredArgsConstructor
+public class KafkaProducer implements BiConsumer<String,Boolean> {
 
-    private final String TOPIC = "output";
+    @Value("${spring.kafka.topic.valid}")
+    private String validObjectsTopic;
 
-    @Autowired
-    private KafkaTemplate<String,String> kafkaTemplate;
+    @Value("${spring.kafka.topic.invalid}")
+    private String invalidObjectsTopic;
 
-    public void produce(String message) {
-        kafkaTemplate.send(TOPIC, message);
+    private final KafkaTemplate<String,String> kafkaTemplate;
+
+    public void accept(String message, Boolean isValid) {
+        String topic = isValid ? validObjectsTopic : invalidObjectsTopic;
+        log.info("Message '{}' passed to topic {}", message, topic);
+        kafkaTemplate.send(topic, message);
     }
 
 }

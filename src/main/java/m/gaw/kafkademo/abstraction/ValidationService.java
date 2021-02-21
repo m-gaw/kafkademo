@@ -1,38 +1,31 @@
 package m.gaw.kafkademo.abstraction;
 
-import m.gaw.kafkademo.abstraction.components.Deserializer;
-import m.gaw.kafkademo.abstraction.components.Producer;
-import m.gaw.kafkademo.abstraction.components.Serializer;
-import m.gaw.kafkademo.abstraction.components.Validator;
-import m.gaw.kafkademo.abstraction.model.ValidatedObject;
+import lombok.AllArgsConstructor;
+import m.gaw.kafkademo.abstraction.components.MessageConverter;
 
-public class ValidationService<T,U> {
+import java.util.Optional;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
-    protected Deserializer<T> deserializer;
-    protected Serializer<U> serializer;
-    protected Validator validator;
-    protected Producer<U> validObjectProducer;
-    protected Producer<U> invalidObjectProducer;
+@AllArgsConstructor
+public abstract class ValidationService<I,T,O> {
 
-    public ValidationService(Deserializer<T> deserializer, Serializer<U> serializer, Validator validator, Producer<U> validObjectProducer, Producer<U> invalidObjectProducer) {
-        this.deserializer = deserializer;
-        this.serializer = serializer;
-        this.validator = validator;
-        this.validObjectProducer = validObjectProducer;
-        this.invalidObjectProducer = invalidObjectProducer;
-    }
+    protected MessageConverter<I,T,O> messageConverter;
+    protected Predicate<T> validator;
+    protected BiConsumer<O,Boolean> sender;
 
-    public void process(T input){
+    public void process(I input) {
+        final Optional<T> deserializedObject = messageConverter.deserialize(input);
 
-        ValidatedObject validatedObject = deserializer.deserialize(input);
-        U outputMessage = serializer.serialize(validatedObject);
+        if (deserializedObject.isPresent()) {
+            final boolean isValid = validator.test(deserializedObject.get());
+            messageConverter.serialize(deserializedObject.get())
+                    .ifPresent(outputMessage -> sender.accept(outputMessage, isValid));
 
-        if(validator.isValid(validatedObject))
-            validObjectProducer.produce(outputMessage);
+        } else {
+            sender.accept(messageConverter.convertErrorInput(input), false);
 
-        else
-            invalidObjectProducer.produce(outputMessage);
-
+        }
     }
 
 }
